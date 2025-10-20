@@ -15,7 +15,6 @@ func NewAuthController(s *services.AuthService) *AuthController {
 	return &AuthController{Service: s}
 }
 
-// Signup
 func (ac *AuthController) Signup(c *gin.Context) {
 	var req struct {
 		Name     string `json:"name"`
@@ -41,7 +40,6 @@ func (ac *AuthController) Signup(c *gin.Context) {
 	})
 }
 
-// Login
 func (ac *AuthController) Login(c *gin.Context) {
 	var req struct {
 		Email    string `json:"email"`
@@ -53,13 +51,11 @@ func (ac *AuthController) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := ac.Service.AuthenticateUser(req.Email, req.Password)
+	token, err := ac.Service.Login(req.Email, req.Password)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"token": token,
-	})
+	c.JSON(http.StatusOK, gin.H{"token": token})
 }

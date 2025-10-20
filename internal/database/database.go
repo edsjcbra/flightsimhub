@@ -3,37 +3,28 @@ package database
 import (
 	"context"
 	"log"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/edsjcbra/flightsimhub/config"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var DB *pgxpool.Pool
+// Pool exportado
+var Pool *pgxpool.Pool
 
 func Connect() {
-	dbURL := config.AppConfig.DBUrl
+	connStr := config.AppConfig.DatabaseURL
+	var err error
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	pool, err := pgxpool.New(ctx, dbURL)
+	Pool, err = pgxpool.New(context.Background(), connStr)
 	if err != nil {
-		log.Fatalf("❌ Error creating DB pool: %v", err)
+		log.Fatalf("❌ Failed to connect to database: %v", err)
 	}
-
-	err = pool.Ping(ctx)
-	if err != nil {
-		log.Fatalf("❌ Database connection failed: %v", err)
-	}
-
-	DB = pool
 	log.Println("✅ Connected to PostgreSQL successfully")
 }
 
 func Close() {
-	if DB != nil {
-		DB.Close()
+	if Pool != nil {
+		Pool.Close()
 		log.Println("🔌 Database connection closed")
 	}
 }

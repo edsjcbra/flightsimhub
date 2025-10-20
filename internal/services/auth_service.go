@@ -2,88 +2,79 @@ package services
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"time"
 
 	"github.com/edsjcbra/flightsimhub/config"
-	"github.com/edsjcbra/flightsimhub/internal/database"
 	"github.com/edsjcbra/flightsimhub/internal/models"
-	"golang.org/x/crypto/bcrypt"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthService struct{}
-
-func NewAuthService() *AuthService {
-	return &AuthService{}
+type AuthService struct {
+	DB *pgxpool.Pool
 }
 
-// Criar novo usuário
+func NewAuthService(db *pgxpool.Pool) *AuthService {
+	return &AuthService{DB: db}
+}
+
+// CreateUser cria usuário
 func (s *AuthService) CreateUser(name, email, password string) (*models.User, error) {
 	ctx := context.Background()
 
-	// Verificar se email já existe
 	var exists int
-	err := database.DB.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE email=$1", email).Scan(&exists)
+	err := s.DB.QueryRow(ctx, "SELECT COUNT(*) FROM users WHERE email=$1", email).Scan(&exists)
 	if err != nil {
 		return nil, err
 	}
 	if exists > 0 {
-		return nil, errors.New("email already registered")
+		return nil, fmt.Errorf("email already registered")
 	}
 
-	// Hashear senha
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
 
-	now := time.Now()
-	var id int64
-	err = database.DB.QueryRow(ctx,
-		"INSERT INTO users (name, email, password_hash, created_at, updated_at) VALUES ($1,$2,$3,$4,$5) RETURNING id",
-		name, email, string(hash), now, now).Scan(&id)
+	var id int
+	err = s.DB.QueryRow(ctx,
+		"INSERT INTO users (name,email,password,created_at,updated_at) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+		name, email, string(hashedPassword), time.Now(), time.Now(),
+	).Scan(&id)
 	if err != nil {
 		return nil, err
 	}
 
-	user := &models.User{
-		ID:           id,
-		Name:         name,
-		Email:        email,
-		PasswordHash: string(hash),
-		CreatedAt:    now,
-		UpdatedAt:    now,
-	}
-
-	return user, nil
+	return &models.User{
+		ID:        id,
+		Name:      name,
+		Email:     email,
+		Password:  string(hashedPassword),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}, nil
 }
 
-// Autenticar usuário e gerar JWT
-func (s *AuthService) AuthenticateUser(email, password string) (string, error) {
+// Login retorna JWT
+func (s *AuthService) Login(email, password string) (string, error) {
 	ctx := context.Background()
+
 	var user models.User
-	err := database.DB.QueryRow(ctx, "SELECT id, password_hash FROM users WHERE email=$1", email).
-		Scan(&user.ID, &user.PasswordHash)
+	err := s.DB.QueryRow(ctx, "SELECT id,password FROM users WHERE email=$1", email).Scan(&user.ID, &user.Password)
 	if err != nil {
-		return "", errors.New("invalid email or password")
+		return "", fmt.Errorf("invalid credentials")
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
-	if err != nil {
-		return "", errors.New("invalid email or password")
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		return "", fmt.Errorf("invalid credentials")
 	}
 
-	// Criar token JWT
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": user.ID,
-		"exp":     time.Now().Add(time.Hour * 72).Unix(), // 3 dias
+		"exp":     time.Now().Add(24 * time.Hour).Unix(),
 	})
 
-	tokenString, err := token.SignedString([]byte(config.AppConfig.JWTSecret))
-	if err != nil {
-		return "", err
-	}
-
-	return tokenString, nil
+	return token.SignedString([]byte(config.AppConfig.JWTSecret))
 }
