@@ -15,10 +15,22 @@ func NewOrderController(s *services.OrderService) *OrderController {
 	return &OrderController{Service: s}
 }
 
-func (o *OrderController) GetOrders(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, gin.H{"orders": "stub"})
+func (oc *OrderController) CreateOrder(c *gin.Context) {
+	userID := c.GetInt("user_id")
+	order, err := oc.Service.CreateOrder(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, order)
 }
 
-func (o *OrderController) CreateOrder(ctx *gin.Context) {
-	ctx.JSON(http.StatusOK, gin.H{"message": "order created (stub)"})
+func (oc *OrderController) GetOrders(c *gin.Context) {
+	userID := c.GetInt("user_id")
+	orders, err := oc.Service.GetOrders(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, orders)
 }
