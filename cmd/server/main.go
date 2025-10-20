@@ -39,6 +39,7 @@ func main() {
 	routes.RegisterRoutes(router, authController, productController, cartController, orderController)
 
 	// Rodar servidor
+	fmt.Println("")
 	port := config.AppConfig.Port
 	log.Printf("🌍 Server running on http://localhost:%s\n", port)
 	if err := router.Run(fmt.Sprintf(":%s", port)); err != nil {
